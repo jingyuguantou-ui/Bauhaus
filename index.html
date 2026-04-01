@@ -537,8 +537,8 @@
         canvas.elt.style.margin = 'auto';
         
         canvas.elt.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-        }, {passive: false});
+            e.stopPropagation();
+        }, {passive: true});
         
         dim = height / 5;  // 与参考一致：5x5网格
         if (dim < 50) dim = 50;
@@ -749,23 +749,25 @@
         handleTap(x - width/2, y - height/2); 
     }
     
-    // 触摸支持
+    // 触摸支持 - 只处理画布区域内的触摸
     function touchStarted() {
-        if (document.getElementById('modalOverlay').classList.contains('active')) return true;
-        if (document.getElementById('todayPanel').classList.contains('active')) {
-            closeTodayPanel();
-            return true;
-        }
         let t = touches[0];
-        if (t) {
-            let x = t.x;
-            let y = t.y;
-            if (x > 0 && x < width && y > 0 && y < height) {
-                handleTap(x - width/2, y - height/2);
-                if (navigator.vibrate) navigator.vibrate(30);
+        if (!t) return false;
+        let x = t.x;
+        let y = t.y;
+        let canvas = document.getElementById('p5Canvas');
+        let rect = canvas.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+            if (document.getElementById('modalOverlay').classList.contains('active')) return true;
+            if (document.getElementById('todayPanel').classList.contains('active')) {
+                closeTodayPanel();
+                return true;
             }
+            handleTap(x - width/2, y - height/2);
+            if (navigator.vibrate) navigator.vibrate(30);
+            return false;
         }
-        return false; // 防止默认行为
+        return true; // 让其他元素处理触摸
     }
     
     // ========== 模态框 ==========
