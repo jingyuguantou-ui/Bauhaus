@@ -736,20 +736,34 @@
         }
     }
     
+    // 触摸支持 - 只处理画布内的触摸
+    function touchStarted() {
+        if (document.getElementById('modalOverlay').classList.contains('active')) return true;
+        if (document.getElementById('todayPanel').classList.contains('active')) {
+            closeTodayPanel();
+            return true;
+        }
+        let t = touches[0];
+        if (!t) return false;
+        if (t.x > 0 && t.x < width && t.y > 0 && t.y < height) {
+            handleTap(t.x - width/2, t.y - height/2);
+            if (navigator.vibrate) navigator.vibrate(30);
+            return false;
+        }
+        return true;
+    }
+    
     function mousePressed() { 
         if (document.getElementById('modalOverlay').classList.contains('active')) return;
         if (document.getElementById('todayPanel').classList.contains('active')) {
             closeTodayPanel();
             return;
         }
-        // 处理触摸和鼠标点击
         let x = mouseX;
         let y = mouseY;
         if (x < 0 || x > width || y < 0 || y > height) return;
         handleTap(x - width/2, y - height/2); 
     }
-    
-    // 不使用 touchStarted，让系统自然处理触摸
     
     // ========== 模态框 ==========
     function openModal(year, month, day) {
@@ -921,6 +935,7 @@
     window.setup = setup;
     window.draw = draw;
     window.mousePressed = mousePressed;
+    window.touchStarted = touchStarted;
     window.windowResized = windowResized;
     
     updateDisplay();
