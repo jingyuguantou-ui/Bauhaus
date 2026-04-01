@@ -749,26 +749,7 @@
         handleTap(x - width/2, y - height/2); 
     }
     
-    // 触摸支持 - 只处理画布区域内的触摸
-    function touchStarted() {
-        let t = touches[0];
-        if (!t) return false;
-        let x = t.x;
-        let y = t.y;
-        let canvas = document.getElementById('p5Canvas');
-        let rect = canvas.getBoundingClientRect();
-        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-            if (document.getElementById('modalOverlay').classList.contains('active')) return true;
-            if (document.getElementById('todayPanel').classList.contains('active')) {
-                closeTodayPanel();
-                return true;
-            }
-            handleTap(x - width/2, y - height/2);
-            if (navigator.vibrate) navigator.vibrate(30);
-            return false;
-        }
-        return true; // 让其他元素处理触摸
-    }
+    // 不使用 touchStarted，让系统自然处理触摸
     
     // ========== 模态框 ==========
     function openModal(year, month, day) {
@@ -940,7 +921,6 @@
     window.setup = setup;
     window.draw = draw;
     window.mousePressed = mousePressed;
-    window.touchStarted = touchStarted;
     window.windowResized = windowResized;
     
     updateDisplay();
