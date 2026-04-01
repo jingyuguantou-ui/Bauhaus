@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#CC3333">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>包豪斯日历</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            background: #f0ede8;
+            font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+            touch-action: manipulation;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            height: 100dvh;
+        }
+
+        /* 顶部时间栏 */
+        .header {
+            padding: 12px 16px;
+            background: #fff;
+            border-bottom: 2px solid #1a1a1a;
+            flex-shrink: 0;
+        }
+
+        .time-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .current-time {
+            font-size: 28px;
+            font-weight: 300;
+            color: #1a1a1a;
+            letter-spacing: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .current-date {
+            font-size: 14px;
+            color: #666;
+            letter-spacing: 1px;
+        }
+
+        /* 画布区域 - VOID 模式白色细格 */
+        .canvas-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background-color: #fafafa;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #p5Canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* 底部控制栏 */
+        .bottom-bar {
+            padding: 12px 16px;
+            background: #fff;
+            border-top: 2px solid #1a1a1a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        }
+
+        .nav-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: #1a1a1a;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .nav-btn:active {
+            opacity: 0.7;
+            transform: scale(0.95);
+        }
+
+        .month-display {
+            font-size: 18px;
+            font-weight: 500;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 22px;
+            letter-spacing: 1px;
+        }
+
+        .today-btn {
+            padding: 8px 20px;
+            background: #CC3333;
+            color: #fff;
+            border: none;
+            border-radius: 22px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .today-btn:active {
+            opacity: 0.7;
+        }
+
+        /* 模态框 - 移动端优化 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: #fff;
+            width: 100%;
+            max-width: 100%;
+            max-height: 85vh;
+            border-radius: 20px 20px 0 0;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-overlay.active .modal {
+            transform: translateY(0);
+        }
+
+        .modal-handle {
+            width: 36px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+            margin: 10px auto;
+            flex-shrink: 0;
+        }
+
+        .modal-header {
+            padding: 0 20px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .close-modal {
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: #f0f0f0;
+            border: none;
+            font-size: 16px;
+            color: #666;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .memo-input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            font-size: 16px;
+            background: #fafaf8;
+            margin-bottom: 20px;
+        }
+
+        .memo-input:focus {
+            outline: none;
+            border-color: #CC3333;
+        }
+
+        .tasks-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .tasks-container {
+            min-height: 100px;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .task-item input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            accent-color: #CC3333;
+        }
+
+        .task-item .task-text {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            padding: 4px 0;
+        }
+
+        .task-item .task-text:focus {
+            outline: none;
+        }
+
+        .task-item .task-text.completed {
+            color: #999;
+            position: relative;
+        }
+        
+        .task-item .task-text.completed::after {
+            content: '';
+            position: absolute;
+            left: -5px;
+            right: -5px;
+            top: 50%;
+            height: 2px;
+            background: #CC3333;
+            transform: rotate(-3deg);
+            border-radius: 1px;
+            opacity: 0.7;
+        }
+        
+        .task-item .task-text.completed::before {
+            content: '';
+            position: absolute;
+            left: -3px;
+            right: -3px;
+            top: 48%;
+            height: 1px;
+            background: #CC3333;
+            transform: rotate(2deg);
+            opacity: 0.4;
+        }
+
+        .delete-task {
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: #ffeeee;
+            border: none;
+            font-size: 16px;
+            color: #CC3333;
+            cursor: pointer;
+        }
+
+        .add-task-btn {
+            width: 100%;
+            padding: 14px;
+            background: #1a1a1a;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            margin-top: 12px;
+            cursor: pointer;
+        }
+
+        .add-task-btn:active {
+            opacity: 0.8;
+        }
+
+        .empty-tasks {
+            text-align: center;
+            color: #999;
+            padding: 30px;
+            font-size: 14px;
+        }
+
+        /* 今日展开面板 - 移动端全屏 */
+        .today-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .today-panel.active {
+            display: flex;
+        }
+
+        .today-panel-bg {
+            position: absolute;
+            inset: 0;
+            transition: background 0.3s;
+        }
+
+        .today-panel-content {
+            position: relative;
+            width: 90%;
+            max-width: 400px;
+            max-height: 80vh;
+            background: rgba(255,255,255,0.95);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            transform: scale(0.9);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .today-panel.active .today-panel-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .today-date {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .today-memo {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+
+        .today-tasks-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        .today-task {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 15px;
+            color: #333;
+        }
+        
+        .today-task.done {
+            color: #999;
+            position: relative;
+        }
+        
+        .today-task.done::after {
+            content: '';
+            position: absolute;
+            left: -5px;
+            right: -5px;
+            top: 50%;
+            height: 2px;
+            background: #CC3333;
+            transform: rotate(-3deg);
+            border-radius: 1px;
+            opacity: 0.7;
+        }
+        
+        .today-task.done::before {
+            content: '';
+            position: absolute;
+            left: -3px;
+            right: -3px;
+            top: 48%;
+            height: 1px;
+            background: #CC3333;
+            transform: rotate(2deg);
+            opacity: 0.4;
+        }
+
+        .today-close-hint {
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.1/lib/p5.js"></script>
+</head>
+<body>
+<div class="app">
+    <div class="header">
+        <div class="time-row">
+            <span class="current-time" id="currentTime">--:--:--</span>
+            <span class="current-date" id="currentDate">----.--.--</span>
+        </div>
+    </div>
+    
+    <div class="canvas-wrap">
+        <div id="p5Canvas"></div>
+    </div>
+    
+    <div class="bottom-bar">
+        <div class="nav-group">
+            <button class="nav-btn" id="prevMonth">←</button>
+            <button class="nav-btn" id="nextMonth">→</button>
+        </div>
+        <div class="month-display" id="monthDisplay">2026年1月</div>
+        <button class="today-btn" id="todayBtn">TODAY</button>
+    </div>
+</div>
+
+<!-- 任务编辑模态框 -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+            <h3 id="modalDate">2025年4月8日 周二</h3>
+            <button class="close-modal" id="closeModal">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="text" class="memo-input" id="memoInput" placeholder="📝 备忘...">
+            <div class="tasks-header">✓ 任务清单</div>
+            <div class="tasks-container" id="tasksContainer"></div>
+            <button class="add-task-btn" id="addTaskBtn">+ 添加任务</button>
+        </div>
+    </div>
+</div>
+
+<!-- 今日预览面板 -->
+<div class="today-panel" id="todayPanel">
+    <div class="today-panel-bg" id="todayPanelBg"></div>
+    <div class="today-panel-content">
+        <div class="today-date" id="todayDate"></div>
+        <div class="today-memo" id="todayMemo"></div>
+        <div class="today-tasks-title">任务清单</div>
+        <div id="todayTasks"></div>
+        <div class="today-close-hint">点击任意位置关闭</div>
+    </div>
+</div>
+
+<script>
+    const BAUHAUS = {
+        red: '#CC0404', yellow: '#FFC300', blue: '#0065FF', cyan: '#01ABAB',
+        black: '#282828', white: '#F5F5F0', gray: '#E8E4D8',
+        dotRed: '#E65C5C', dotGreen: '#5CAD5C', dotYellow: '#E5B83C',
+        bg: '#FFFFE0'  // ivory 奶油色背景
+    };
+    
+    let dim, ang = 0, tang = 0, t = 0, slide = 0;
+    let calendarData = {};
+    let currentYear = 2026, currentMonth = 0;
+    let dateGrid = [];
+    
+    let editingDate = null;
+    let currentTasks = [];
+    let currentMemo = "";
+    
+    const holidays = {
+        '2026-1-1':'元旦','2026-1-26':'春节','2026-2-12':'元宵节','2026-4-4':'清明节','2026-5-1':'劳动节',
+        '2026-6-19':'端午节','2026-8-19':'七夕节','2026-8-27':'中元节','2026-9-25':'中秋节','2026-10-1':'国庆节',
+        '2026-10-18':'重阳节','2026-12-22':'冬至',
+        '2027-1-1':'元旦','2027-2-6':'春节','2027-2-20':'元宵节','2027-4-5':'清明节','2027-5-1':'劳动节',
+        '2027-6-9':'端午节','2027-8-8':'七夕节','2027-8-16':'中元节','2027-9-15':'中秋节','2027-10-1':'国庆节',
+        '2027-10-8':'重阳节','2027-12-22':'冬至'
+    };
+    
+    function setup() {
+        let wrap = document.querySelector('.canvas-wrap');
+        // 与参考一致：正方形画布
+        let s = Math.min(wrap.clientWidth, wrap.clientHeight);
+        if (s < 100) s = 300;
+        
+        let canvas = createCanvas(s, s);
+        canvas.parent('p5Canvas');
+        
+        // 确保画布可见
+        canvas.elt.style.display = 'block';
+        canvas.elt.style.margin = 'auto';
+        
+        canvas.elt.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+        }, {passive: false});
+        
+        dim = height / 5;  // 与参考一致：5x5网格
+        if (dim < 50) dim = 50;
+        
+        rectMode(CENTER);
+        textAlign(CENTER, CENTER);
+        loadData();
+        updateDateGrid();
+        
+        // 旋转动画 - 每4秒触发一次（与参考一致）
+        setInterval(() => { 
+            t = 0; 
+            tang += HALF_PI; 
+        }, 4000);
+        
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+    }
+    
+    function updateDateTime() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const weekdays = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        document.getElementById('currentTime').innerHTML = timeStr;
+        document.getElementById('currentDate').innerHTML = `${year}.${month}.${day} ${weekdays[now.getDay()]}`;
+    }
+    
+    function loadData() {
+        let saved = localStorage.getItem('bauhausCalendar');
+        if (saved) calendarData = JSON.parse(saved);
+        // 初始默认数据（2026年）
+        else {
+            calendarData = {
+                '2026-4-4': { memo: '清明节', tasks: [{ text: '扫墓', done: false }, { text: '踏青', done: false }] },
+                '2026-5-1': { memo: '劳动节', tasks: [{ text: '休息', done: false }] }
+            };
+        }
+    }
+    
+    function saveData() { 
+        localStorage.setItem('bauhausCalendar', JSON.stringify(calendarData)); 
+    }
+    
+    function getDayData(y,m,d) { 
+        return calendarData[`${y}-${m+1}-${d}`] || { memo: '', tasks: [] }; 
+    }
+    
+    function setDayData(y,m,d,data) {
+        let key = `${y}-${m+1}-${d}`;
+        if (data.memo || (data.tasks && data.tasks.length)) calendarData[key] = data;
+        else delete calendarData[key];
+        saveData();
+        updateDateGrid();
+    }
+    
+    function updateDateGrid() {
+        dateGrid = [];
+        let firstDay = new Date(currentYear, currentMonth, 1);
+        let firstDayIndex = firstDay.getDay();
+        let daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        let startOffset = -firstDayIndex;
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 5; col++) {
+                let dayNum = startOffset + row * 5 + col + 1;
+                let year = currentYear, month = currentMonth, isCurrentMonth = true;
+                if (dayNum < 1) {
+                    isCurrentMonth = false;
+                    let prevMonth = currentMonth - 1, prevYear = currentYear;
+                    if (prevMonth < 0) { prevMonth = 11; prevYear--; }
+                    dayNum = new Date(prevYear, prevMonth + 1, 0).getDate() + dayNum;
+                    year = prevYear; month = prevMonth;
+                } else if (dayNum > daysInMonth) {
+                    isCurrentMonth = false;
+                    dayNum = dayNum - daysInMonth;
+                    if (currentMonth === 11) { month = 0; year = currentYear + 1; }
+                    else { month = currentMonth + 1; year = currentYear; }
+                }
+                let x = col * dim;
+                let y = row * dim;
+                let dayOfWeek = new Date(year, month, dayNum).getDay();
+                let isHoliday = holidays.hasOwnProperty(`${year}-${month+1}-${dayNum}`);
+                dateGrid.push({ year, month, day: dayNum, x, y, isCurrentMonth, dayOfWeek, isHoliday });
+            }
+        }
+    }
+    
+    function isWeekend(dow) { return dow === 0 || dow === 6; }
+    function getCellColor(d) {
+        if (!d.isCurrentMonth) return BAUHAUS.gray;
+        if (d.isHoliday) return BAUHAUS.red;
+        if (isWeekend(d.dayOfWeek)) return BAUHAUS.yellow;
+        return BAUHAUS.blue;
+    }
+    function getTextColor(bg) { 
+        return (bg === BAUHAUS.yellow || bg === BAUHAUS.gray) ? BAUHAUS.black : BAUHAUS.white; 
+    }
+    function getTaskDotColor(tasks, memo) {
+        if (!tasks?.length) return memo?.trim() ? BAUHAUS.dotYellow : null;
+        return tasks.every(t=>t.done) ? BAUHAUS.dotGreen : BAUHAUS.dotRed;
+    }
+    
+    function draw() {
+        background(250, 250, 250);  // VOID 白色细格背景
+        
+        t += 0.01;
+        t = constrain(t, 0, 1);
+        let q = 1 - pow(1-t, 2.2);
+        ang = lerp(ang, tang, q);
+        slide = -cos(2*ang);
+        
+        // 与参考一致：原点移到第一个格子中心
+        translate(dim / 2, dim / 2);
+        
+        // 绘制格子
+        for (let d of dateGrid) {
+            let x = d.x;
+            let y = d.y;
+            push();
+            translate(x, y);
+            
+            // 黑色多边形 + 彩色块 - 一起跟随旋转
+            push();
+            rotate(ang);
+            
+            // 黑色多边形
+            fill(40);
+            noStroke();
+            beginShape();
+            vertex(-dim/2, -dim/2); vertex(0, -dim/2); vertex(dim/2, 0);
+            vertex(dim/2, dim/2); vertex(0, dim/2); vertex(-dim/2, 0);
+            endShape(CLOSE);
+            
+            // 彩色块 - 跟随 slide 从一角滑到另一角
+            let col = getCellColor(d);
+            fill(col);
+            noStroke();
+            rect(slide*dim/4, slide*dim/4, dim / 2, dim / 2);
+            
+            // 日期 - 在色块中央，位置随色块移动，但数字始终朝上
+            push();
+            translate(slide*dim/4, slide*dim/4);
+            rotate(-ang);
+            fill(getTextColor(col));
+            noStroke();
+            textSize(dim * 0.22);
+            text(d.day, 0, 0);
+            pop();
+            
+            pop(); // 关闭 rotate
+            
+            // 任务/备忘点 - 放在格子外部左上角
+            let dayData = getDayData(d.year, d.month, d.day);
+            let dotColor = getTaskDotColor(dayData.tasks, dayData.memo);
+            if (dotColor) {
+                fill(dotColor);
+                noStroke();
+                circle(-dim*0.4, -dim*0.4, dim*0.08);
+            }
+            
+            // 今日红点 - 放在格子外部右上角，避免被图案和数字遮挡
+            let nowDate = new Date();
+            if (d.year === nowDate.getFullYear() && d.month === nowDate.getMonth() && 
+                d.day === nowDate.getDate() && d.isCurrentMonth) {
+                fill(BAUHAUS.dotRed);
+                noStroke();
+                circle(dim*0.4, -dim*0.4, dim*0.1);
+            }
+            
+            pop(); // 关闭 rotate 的 push
+            pop(); // 关闭 cell 的 push
+        }
+        
+        // 标题 - 在底部
+        push();
+        translate(0, 5 * dim - 10);
+        fill(40);
+        noStroke();
+        textSize(10);
+        text("BAUHAUS", 0, 0);
+        pop();
+    }
+    
+    // ========== 交互 ==========
+    function handleTap(x, y) {
+        for (let d of dateGrid) {
+            let cx = d.x - width/2, cy = d.y - height/2;
+            if (dist(x, y, cx, cy) < dim * 0.55) {
+                if (navigator.vibrate) navigator.vibrate(30);
+                openModal(d.year, d.month, d.day);
+                break;
+            }
+        }
+    }
+    
+    function mousePressed() { 
+        if (document.getElementById('modalOverlay').classList.contains('active')) return;
+        if (document.getElementById('todayPanel').classList.contains('active')) {
+            closeTodayPanel();
+            return;
+        }
+        // 处理触摸和鼠标点击
+        let x = mouseX;
+        let y = mouseY;
+        if (x < 0 || x > width || y < 0 || y > height) return;
+        handleTap(x - width/2, y - height/2); 
+    }
+    
+    // 触摸支持
+    function touchStarted() {
+        if (document.getElementById('modalOverlay').classList.contains('active')) return true;
+        if (document.getElementById('todayPanel').classList.contains('active')) {
+            closeTodayPanel();
+            return true;
+        }
+        let t = touches[0];
+        if (t) {
+            let x = t.x;
+            let y = t.y;
+            if (x > 0 && x < width && y > 0 && y < height) {
+                handleTap(x - width/2, y - height/2);
+                if (navigator.vibrate) navigator.vibrate(30);
+            }
+        }
+        return false; // 防止默认行为
+    }
+    
+    // ========== 模态框 ==========
+    function openModal(year, month, day) {
+        editingDate = { year, month, day };
+        let data = getDayData(year, month, day);
+        currentMemo = data.memo || '';
+        currentTasks = (data.tasks || []).map(t => ({ ...t }));
+        
+        let weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        let d = new Date(year, month, day);
+        document.getElementById('modalDate').innerHTML = `${year}年${month+1}月${day}日 ${weekdays[d.getDay()]}`;
+        document.getElementById('memoInput').value = currentMemo;
+        
+        renderTasks();
+        document.getElementById('modalOverlay').classList.add('active');
+    }
+    
+    function renderTasks() {
+        let container = document.getElementById('tasksContainer');
+        if (currentTasks.length === 0) {
+            container.innerHTML = '<div class="empty-tasks">暂无任务，点击下方添加</div>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        currentTasks.forEach((task, idx) => {
+            let div = document.createElement('div');
+            div.className = 'task-item';
+            div.innerHTML = `
+                <input type="checkbox" ${task.done ? 'checked' : ''} data-idx="${idx}">
+                <input type="text" class="task-text ${task.done ? 'completed' : ''}" value="${task.text}" data-idx="${idx}">
+                <button class="delete-task" data-idx="${idx}">✕</button>
+            `;
+            container.appendChild(div);
+        });
+        
+        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.onchange = (e) => {
+                currentTasks[e.target.dataset.idx].done = e.target.checked;
+                saveCurrentModal();
+                renderTasks();
+            };
+        });
+        
+        container.querySelectorAll('.task-text').forEach(txt => {
+            txt.onchange = (e) => {
+                currentTasks[e.target.dataset.idx].text = e.target.value;
+                saveCurrentModal();
+            };
+            txt.onblur = saveCurrentModal;
+        });
+        
+        container.querySelectorAll('.delete-task').forEach(btn => {
+            btn.onclick = (e) => {
+                currentTasks.splice(e.target.dataset.idx, 1);
+                saveCurrentModal();
+                renderTasks();
+            };
+        });
+    }
+    
+    function saveCurrentModal() {
+        if (!editingDate) return;
+        let memo = document.getElementById('memoInput').value;
+        setDayData(editingDate.year, editingDate.month, editingDate.day, {
+            memo: memo,
+            tasks: currentTasks.filter(t => t.text && t.text.trim())
+        });
+    }
+    
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('active');
+        editingDate = null;
+    }
+    
+    // ========== 今日面板 ==========
+    function goToToday() {
+        let nowDate = new Date();
+        currentYear = nowDate.getFullYear();
+        currentMonth = nowDate.getMonth();
+        updateDateGrid();
+        updateDisplay();
+        
+        let data = getDayData(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+        let weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        
+        let bgColor = BAUHAUS.blue;
+        for (let d of dateGrid) {
+            if (d.year === nowDate.getFullYear() && d.month === nowDate.getMonth() && 
+                d.day === nowDate.getDate() && d.isCurrentMonth) {
+                bgColor = getCellColor(d);
+                break;
+            }
+        }
+        
+        document.getElementById('todayPanelBg').style.background = bgColor;
+        document.getElementById('todayDate').innerHTML = `${nowDate.getFullYear()}.${String(nowDate.getMonth()+1).padStart(2,'0')}.${String(nowDate.getDate()).padStart(2,'0')} ${weekdays[nowDate.getDay()]}`;
+        document.getElementById('todayMemo').innerHTML = data.memo || '暂无备忘';
+        document.getElementById('todayMemo').style.display = data.memo ? 'block' : 'none';
+        
+        let tasksEl = document.getElementById('todayTasks');
+        if (data.tasks && data.tasks.length > 0) {
+            tasksEl.innerHTML = data.tasks.map(t => 
+                `<div class="today-task ${t.done ? 'done' : ''}">${t.done ? '✓ ' : '○ '}${t.text}</div>`
+            ).join('');
+        } else {
+            tasksEl.innerHTML = '<div class="empty-tasks">暂无任务</div>';
+        }
+        
+        document.getElementById('todayPanel').classList.add('active');
+    }
+    
+    function closeTodayPanel() {
+        document.getElementById('todayPanel').classList.remove('active');
+    }
+    
+    function updateDisplay() {
+        let names = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+        document.getElementById('monthDisplay').innerHTML = `${currentYear}年 ${names[currentMonth]}`;
+    }
+    
+    function prevMonth() { 
+        currentMonth--; 
+        if (currentMonth < 0) { currentMonth = 11; currentYear--; } 
+        updateDateGrid(); 
+        updateDisplay(); 
+    }
+    
+    function nextMonth() { 
+        currentMonth++; 
+        if (currentMonth > 11) { currentMonth = 0; currentYear++; } 
+        updateDateGrid(); 
+        updateDisplay(); 
+    }
+    
+    function windowResized() {
+        let wrap = document.querySelector('.canvas-wrap');
+        let s = Math.min(wrap.clientWidth - 20, wrap.clientHeight - 20);
+        if (s < 100) s = 300;
+        resizeCanvas(s, s);
+        dim = height / 5;  // 与参考一致
+        if (dim < 50) dim = 50;
+        updateDateGrid();
+    }
+    
+    // 绑定事件
+    document.getElementById('prevMonth').onclick = prevMonth;
+    document.getElementById('nextMonth').onclick = nextMonth;
+    document.getElementById('todayBtn').onclick = goToToday;
+    document.getElementById('closeModal').onclick = closeModal;
+    document.getElementById('addTaskBtn').onclick = () => {
+        currentTasks.push({ text: '', done: false });
+        saveCurrentModal();
+        renderTasks();
+        setTimeout(() => {
+            let inputs = document.querySelectorAll('.task-text');
+            if (inputs.length > 0) {
+                inputs[inputs.length - 1].focus();
+            }
+        }, 50);
+    };
+    document.getElementById('modalOverlay').onclick = (e) => {
+        if (e.target.id === 'modalOverlay') closeModal();
+    };
+    document.getElementById('todayPanel').onclick = closeTodayPanel;
+    document.getElementById('memoInput').onchange = saveCurrentModal;
+    document.getElementById('memoInput').onblur = saveCurrentModal;
+    
+    window.setup = setup;
+    window.draw = draw;
+    window.mousePressed = mousePressed;
+    window.touchStarted = touchStarted;
+    window.windowResized = windowResized;
+    
+    updateDisplay();
+</script>
+</body>
+</html>
